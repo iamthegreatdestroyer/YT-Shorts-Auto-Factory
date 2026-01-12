@@ -7,234 +7,244 @@ Tests configuration loading, validation, and defaults.
 from __future__ import annotations
 
 import os
-import tempfile
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-import yaml
+
+from src.core.config import (
+    Settings,
+    AppSettings,
+    Environment,
+    LogLevel,
+    TrendSettings,
+    StorageSettings,
+)
 
 
-class TestConfigDefaults:
-    """Test default configuration values."""
+class TestSettingsStructure:
+    """Test settings object structure."""
 
-    def test_environment_default(self):
-        """Test default environment is development."""
-        from src.core.config import Settings
+    def test_settings_has_app_section(self):
+        """Test Settings has app configuration section."""
+        settings = Settings()
+        assert hasattr(settings, 'app')
+        assert isinstance(settings.app, AppSettings)
 
-        with patch.dict(os.environ, {}, clear=True):
-            settings = Settings()
-            assert settings.environment in ("development", "testing", "production")
+    def test_settings_has_trends_section(self):
+        """Test Settings has trends configuration section."""
+        settings = Settings()
+        assert hasattr(settings, 'trends')
+        assert isinstance(settings.trends, TrendSettings)
 
-    def test_debug_default_false_in_production(self):
-        """Test debug is False by default in production."""
-        from src.core.config import Settings
-
-        with patch.dict(os.environ, {"ENVIRONMENT": "production"}, clear=True):
-            settings = Settings()
-            # In production, debug should default to False
-            assert settings.environment == "production"
+    def test_settings_has_storage_section(self):
+        """Test Settings has storage configuration section."""
+        settings = Settings()
+        assert hasattr(settings, 'storage')
+        assert isinstance(settings.storage, StorageSettings)
 
     def test_app_name_default(self):
         """Test default app name is set."""
-        from src.core.config import Settings
-
         settings = Settings()
-        assert "Shorts" in settings.app_name or "Factory" in settings.app_name or settings.app_name
+        assert settings.app.name == "YouTube Shorts Factory"
 
-    def test_nested_settings_exist(self):
-        """Test that nested settings objects exist."""
-        from src.core.config import Settings
-
+    def test_app_version_exists(self):
+        """Test app version is defined."""
         settings = Settings()
-        # Check that we have access to settings (exact structure may vary)
-        assert settings is not None
+        assert settings.app.version
+        assert "." in settings.app.version
 
 
-class TestConfigFromEnv:
+class TestAppSettings:
+    """Test AppSettings defaults and behavior."""
+
+    def test_default_environment_is_development(self):
+        """Test default environment is development."""
+        app_settings = AppSettings()
+        assert app_settings.environment == Environment.DEVELOPMENT
+
+    def test_default_debug_is_false(self):
+        """Test debug is False by default."""
+        app_settings = AppSettings()
+        assert app_settings.debug is False
+
+    def test_default_log_level_is_info(self):
+        """Test default log level is INFO."""
+        app_settings = AppSettings()
+        assert app_settings.log_level == LogLevel.INFO
+
+    def test_max_concurrent_jobs_default(self):
+        """Test default max concurrent jobs."""
+        app_settings = AppSettings()
+        assert app_settings.max_concurrent_jobs == 3
+
+
+class TestEnvironmentVariables:
     """Test configuration from environment variables."""
 
-    def test_debug_from_env(self):
+    def test_app_debug_from_env(self):
         """Test debug flag from environment."""
-        from src.core.config import Settings
+        with patch.dict(os.environ, {"APP_DEBUG": "true"}):
+            app_settings = AppSettings()
+            assert app_settings.debug is True
 
-        with patch.dict(os.environ, {"DEBUG": "true"}):
-            settings = Settings()
-            assert settings.debug is True
-
-    def test_log_level_from_env(self):
+    def test_app_log_level_from_env(self):
         """Test log level from environment."""
-        from src.core.config import Settings
+        with patch.dict(os.environ, {"APP_LOG_LEVEL": "WARNING"}):
+            app_settings = AppSettings()
+            assert app_settings.log_level == LogLevel.WARNING
 
-        with patch.dict(os.environ, {"LOG_LEVEL": "WARNING"}):
-            settings = Settings()
-            assert settings.log_level.upper() == "WARNING"
-
-    def test_environment_from_env(self):
+    def test_app_environment_from_env(self):
         """Test environment from env var."""
-        from src.core.config import Settings
+        with patch.dict(os.environ, {"APP_ENVIRONMENT": "production"}):
+            app_settings = AppSettings()
+            assert app_settings.environment == Environment.PRODUCTION
 
-        with patch.dict(os.environ, {"ENVIRONMENT": "staging"}):
-            settings = Settings()
-            assert settings.environment == "staging"
+
+class TestSettingsHelpers:
+    """Test Settings helper methods."""
+
+    def test_is_production(self):
+        """Test is_production property."""
+        settings = Settings()
+        original = settings.app.environment
+        
+        settings.app.environment = Environment.PRODUCTION
+        assert settings.is_production is True
+        
+        settings.app.environment = Environment.DEVELOPMENT
+        assert settings.is_production is False
+        
+        settings.app.environment = original
+
+    def test_is_development(self):
+        """Test is_development property."""
+        settings = Settings()
+        original = settings.app.environment
+        
+        settings.app.environment = Environment.DEVELOPMENT
+        assert settings.is_development is True
+        
+        settings.app.environment = Environment.PRODUCTION
+        assert settings.is_development is False
+        
+        settings.app.environment = original
+
+    def test_is_testing(self):
+        """Test is_testing property."""
+        settings = Settings()
+        original = settings.app.environment
+        
+        settings.app.environment = Environment.TESTING
+        assert settings.is_testing is True
+        
+        settings.app.environment = original
+
+    def test_get_log_level(self):
+        """Test get_log_level method."""
+        settings = Settings()
+        original = settings.app.log_level
+        
+        settings.app.log_level = LogLevel.DEBUG
+        assert settings.get_log_level() == "DEBUG"
+        
+        settings.app.log_level = LogLevel.WARNING
+        assert settings.get_log_level() == "WARNING"
+        
+        settings.app.log_level = original
+
+
+class TestTrendSettings:
+    """Test TrendSettings configuration."""
+
+    def test_trend_sources_default(self):
+        """Test default trend sources."""
+        trend_settings = TrendSettings()
+        assert trend_settings.enable_youtube_trends is True
+        assert trend_settings.enable_reddit is False
+
+    def test_cache_ttl_default(self):
+        """Test default cache TTL."""
+        trend_settings = TrendSettings()
+        assert trend_settings.cache_ttl_minutes > 0
+        assert trend_settings.cache_ttl_minutes <= 60
+
+    def test_reddit_settings_default(self):
+        """Test default Reddit settings."""
+        trend_settings = TrendSettings()
+        assert trend_settings.enable_reddit is False
+        assert isinstance(trend_settings.reddit_subreddits, str)
+
+
+class TestStorageSettings:
+    """Test StorageSettings configuration."""
+
+    def test_default_paths_exist(self):
+        """Test default paths are defined."""
+        storage_settings = StorageSettings()
+        assert storage_settings.base_path is not None
+        assert storage_settings.cache_path is not None
 
 
 class TestConfigValidation:
     """Test configuration validation."""
 
-    def test_invalid_log_level(self):
-        """Test that invalid log level is handled."""
-        from src.core.config import Settings
+    def test_invalid_log_level_raises(self):
+        """Test that invalid log level raises validation error."""
+        with patch.dict(os.environ, {"APP_LOG_LEVEL": "INVALID_LEVEL"}):
+            with pytest.raises(Exception):
+                AppSettings()
 
-        # Should either raise or use default
-        try:
-            with patch.dict(os.environ, {"LOG_LEVEL": "INVALID_LEVEL"}):
-                settings = Settings()
-                # If it doesn't raise, check it falls back to default
-                assert settings.log_level.upper() in ("DEBUG", "INFO", "WARNING", "ERROR")
-        except (ValueError, Exception):
-            pass  # Validation error is acceptable
+    def test_max_concurrent_jobs_bounds(self):
+        """Test max concurrent jobs has bounds."""
+        with patch.dict(os.environ, {"APP_MAX_CONCURRENT_JOBS": "5"}):
+            app_settings = AppSettings()
+            assert app_settings.max_concurrent_jobs == 5
+        
+        with patch.dict(os.environ, {"APP_MAX_CONCURRENT_JOBS": "100"}):
+            with pytest.raises(Exception):
+                AppSettings()
 
-    def test_paths_are_path_objects(self):
-        """Test that path settings return Path objects."""
-        from src.core.config import Settings
 
+class TestApiKeyValidation:
+    """Test API key validation."""
+
+    def test_validate_api_keys_returns_dict(self):
+        """Test validate_api_keys returns status dict."""
         settings = Settings()
-        # Check if any path attributes exist and are Path-like
-        for attr in dir(settings):
-            if attr.endswith("_dir") or attr.endswith("_path"):
-                value = getattr(settings, attr, None)
-                if value is not None:
-                    assert isinstance(value, (str, Path))
+        api_status = settings.validate_api_keys()
+        
+        assert isinstance(api_status, dict)
+        assert "youtube" in api_status
+        assert "reddit" in api_status
 
-
-class TestConfigPaths:
-    """Test path configuration and creation."""
-
-    def test_data_dir_default(self):
-        """Test default data directory."""
-        from src.core.config import Settings
-
+    def test_to_safe_dict_returns_dict(self):
+        """Test to_safe_dict returns dictionary."""
         settings = Settings()
-        if hasattr(settings, "data_dir"):
-            assert settings.data_dir is not None
-
-    def test_logs_dir_default(self):
-        """Test default logs directory."""
-        from src.core.config import Settings
-
-        settings = Settings()
-        if hasattr(settings, "logs_dir"):
-            assert settings.logs_dir is not None
+        safe_dict = settings.to_safe_dict()
+        assert isinstance(safe_dict, dict)
 
 
-class TestConfigEnums:
-    """Test configuration enum values."""
-
-    def test_environment_enum_values(self):
-        """Test Environment enum has expected values."""
-        from src.core.config import Environment
-
-        assert Environment.DEVELOPMENT.value == "development"
-        assert Environment.PRODUCTION.value == "production"
-        assert Environment.TESTING.value == "testing"
-
-    def test_log_level_enum_values(self):
-        """Test LogLevel enum has expected values."""
-        from src.core.config import LogLevel
-
-        assert LogLevel.DEBUG.value == "DEBUG"
-        assert LogLevel.INFO.value == "INFO"
-        assert LogLevel.WARNING.value == "WARNING"
-        assert LogLevel.ERROR.value == "ERROR"
+@pytest.mark.parametrize("env,expected", [
+    ("development", Environment.DEVELOPMENT),
+    ("staging", Environment.STAGING),
+    ("production", Environment.PRODUCTION),
+    ("testing", Environment.TESTING),
+])
+def test_environment_parsing(env: str, expected: Environment):
+    """Test environment string parsing."""
+    with patch.dict(os.environ, {"APP_ENVIRONMENT": env}):
+        app_settings = AppSettings()
+        assert app_settings.environment == expected
 
 
-class TestConfigYaml:
-    """Test YAML configuration loading."""
-
-    def test_load_from_yaml(self, temp_dir: Path):
-        """Test loading configuration from YAML file."""
-        config_file = temp_dir / "config.yaml"
-        config_data = {
-            "app_name": "Test App",
-            "debug": True,
-            "environment": "testing",
-        }
-        config_file.write_text(yaml.dump(config_data))
-
-        # Note: Actual implementation may vary
-        # This tests the expected behavior
-        assert config_file.exists()
-        loaded = yaml.safe_load(config_file.read_text())
-        assert loaded["app_name"] == "Test App"
-
-    def test_save_to_yaml(self, temp_dir: Path):
-        """Test saving configuration to YAML file."""
-        config_file = temp_dir / "config_output.yaml"
-        config_data = {
-            "app_name": "Saved App",
-            "debug": False,
-        }
-
-        config_file.write_text(yaml.dump(config_data))
-
-        # Read back and verify
-        loaded = yaml.safe_load(config_file.read_text())
-        assert loaded["app_name"] == "Saved App"
-        assert loaded["debug"] is False
-
-
-class TestGetSettings:
-    """Test get_settings function."""
-
-    def test_get_settings_returns_settings(self):
-        """Test get_settings returns Settings instance."""
-        from src.core.config import Settings, get_settings
-
-        settings = get_settings()
-        assert isinstance(settings, Settings)
-
-    def test_get_settings_cached(self):
-        """Test get_settings returns cached instance."""
-        from src.core.config import get_settings
-
-        settings1 = get_settings()
-        settings2 = get_settings()
-        # Should return same instance (cached)
-        assert settings1 is settings2
-
-
-class TestConfigSecrets:
-    """Test handling of secret/sensitive configuration."""
-
-    def test_api_key_not_logged(self):
-        """Test that API keys use SecretStr."""
-        from src.core.config import Settings
-
-        settings = Settings()
-        # If there's a youtube_api_key, it should be protected
-        if hasattr(settings, "youtube") and hasattr(settings.youtube, "api_key"):
-            api_key = settings.youtube.api_key
-            if api_key:
-                # SecretStr should not reveal value in str()
-                str_repr = str(api_key)
-                assert "***" in str_repr or len(str_repr) < 5
-
-
-@pytest.mark.parametrize(
-    "env_name,expected_debug",
-    [
-        ("development", True),
-        ("testing", True),
-        ("production", False),
-    ],
-)
-def test_debug_default_by_environment(env_name: str, expected_debug: bool):
-    """Test debug defaults based on environment."""
-    from src.core.config import Settings
-
-    # Note: Actual behavior depends on implementation
-    with patch.dict(os.environ, {"ENVIRONMENT": env_name}):
-        settings = Settings()
-        # Check environment is set correctly
-        assert settings.environment == env_name
+@pytest.mark.parametrize("level,expected", [
+    ("DEBUG", LogLevel.DEBUG),
+    ("INFO", LogLevel.INFO),
+    ("WARNING", LogLevel.WARNING),
+    ("ERROR", LogLevel.ERROR),
+])
+def test_log_level_parsing(level: str, expected: LogLevel):
+    """Test log level string parsing."""
+    with patch.dict(os.environ, {"APP_LOG_LEVEL": level}):
+        app_settings = AppSettings()
+        assert app_settings.log_level == expected

@@ -2,10 +2,14 @@
 Trend sources - Individual platform scrapers and API clients.
 
 Contains implementations for:
-- RedditTrendSource
-- TwitterTrendSource
-- YouTubeTrendSource
-- GoogleTrendSource
+- YouTubeTrendsScraper: Scrapes YouTube trending page and uses API
+- RedditScraper: Fetches hot posts from configured subreddits
 """
 
-__all__: list[str] = []
+from src.trend_analysis.sources.reddit_scraper import RedditScraper
+from src.trend_analysis.sources.youtube_trends import YouTubeTrendsScraper
+
+__all__ = [
+    "YouTubeTrendsScraper",
+    "RedditScraper",
+]
