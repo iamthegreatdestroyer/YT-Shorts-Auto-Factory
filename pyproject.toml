@@ -1,0 +1,322 @@
+[tool.poetry]
+name = "yt-shorts-factory"
+version = "0.1.0"
+description = "Automated YouTube Shorts content factory - generates, compiles, and uploads trending short-form video content"
+authors = ["YT Shorts Factory Team"]
+readme = "README.md"
+license = "MIT"
+repository = "https://github.com/iamthegreatdestroyer/YT-Shorts-Auto-Factory"
+keywords = ["youtube", "shorts", "automation", "video-generation", "content-creation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Internet :: WWW/HTTP",
+]
+packages = [{ include = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+# Video Processing
+moviepy = "^1.0.3"
+ffmpeg-python = "^0.2.0"
+pydub = "^0.25.1"
+Pillow = "^10.1.0"
+
+# Google/YouTube API
+google-api-python-client = "^2.108.0"
+google-auth-oauthlib = "^1.1.0"
+google-auth-httplib2 = "^0.2.0"
+
+# Web Scraping & HTTP
+beautifulsoup4 = "^4.12.0"
+selenium = "^4.15.0"
+webdriver-manager = "^4.0.1"
+requests = "^2.31.0"
+aiohttp = "^3.9.0"
+httpx = "^0.25.0"
+
+# Text-to-Speech
+gTTS = "^2.4.0"
+
+# Configuration & Validation
+pydantic = "^2.5.0"
+pydantic-settings = "^2.1.0"
+python-dotenv = "^1.0.0"
+pyyaml = "^6.0.1"
+
+# Scheduling & Async
+apscheduler = "^3.10.4"
+asyncio-throttle = "^1.0.2"
+
+# Templating
+jinja2 = "^3.1.2"
+
+# Logging & Monitoring
+loguru = "^0.7.2"
+rich = "^13.7.0"
+
+# Utilities
+tenacity = "^8.2.3"
+humanize = "^4.9.0"
+python-slugify = "^8.0.1"
+validators = "^0.22.0"
+
+[tool.poetry.group.dev.dependencies]
+# Testing
+pytest = "^7.4.0"
+pytest-cov = "^4.1.0"
+pytest-asyncio = "^0.21.0"
+pytest-mock = "^3.12.0"
+pytest-xdist = "^3.5.0"
+hypothesis = "^6.92.0"
+faker = "^22.0.0"
+responses = "^0.24.1"
+aioresponses = "^0.7.6"
+
+# Code Quality
+black = "^23.12.0"
+ruff = "^0.1.8"
+mypy = "^1.7.0"
+isort = "^5.13.0"
+pre-commit = "^3.6.0"
+
+# Type Stubs
+types-requests = "^2.31.0"
+types-beautifulsoup4 = "^4.12.0"
+types-Pillow = "^10.1.0"
+types-pyyaml = "^6.0.12"
+
+# Documentation
+mkdocs = "^1.5.3"
+mkdocs-material = "^9.5.3"
+mkdocstrings = { extras = ["python"], version = "^0.24.0" }
+
+[tool.poetry.extras]
+ai = [
+    "diffusers",
+    "transformers",
+    "torch",
+    "accelerate",
+    "safetensors",
+]
+database = [
+    "sqlalchemy",
+    "alembic",
+    "aiosqlite",
+]
+
+[tool.poetry.group.ai]
+optional = true
+
+[tool.poetry.group.ai.dependencies]
+diffusers = "^0.25.0"
+transformers = "^4.36.0"
+torch = "^2.1.0"
+accelerate = "^0.25.0"
+safetensors = "^0.4.1"
+
+[tool.poetry.group.database]
+optional = true
+
+[tool.poetry.group.database.dependencies]
+sqlalchemy = { extras = ["asyncio"], version = "^2.0.23" }
+alembic = "^1.13.0"
+aiosqlite = "^0.19.0"
+
+[tool.poetry.scripts]
+yt-shorts = "src.main:main"
+yt-shorts-cli = "src.cli:cli"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+# ============================================================================
+# Tool Configurations
+# ============================================================================
+
+[tool.black]
+line-length = 88
+target-version = ["py311", "py312"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+    \.eggs
+    | \.git
+    | \.hg
+    | \.mypy_cache
+    | \.tox
+    | \.venv
+    | _build
+    | buck-out
+    | build
+    | dist
+    | migrations
+)/
+'''
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "ARG",    # flake8-unused-arguments
+    "SIM",    # flake8-simplify
+    "TCH",    # flake8-type-checking
+    "PTH",    # flake8-use-pathlib
+    "ERA",    # eradicate
+    "PL",     # pylint
+    "RUF",    # Ruff-specific rules
+]
+ignore = [
+    "E501",   # line too long (handled by black)
+    "B008",   # do not perform function calls in argument defaults
+    "PLR0913", # too many arguments
+    "PLR2004", # magic value comparison
+]
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+    "migrations",
+]
+
+[tool.ruff.per-file-ignores]
+"tests/*" = ["ARG", "PLR2004"]
+"__init__.py" = ["F401"]
+
+[tool.ruff.isort]
+known-first-party = ["src"]
+force-single-line = false
+lines-after-imports = 2
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unreachable = true
+strict_equality = true
+check_untyped_defs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+no_implicit_optional = true
+show_error_codes = true
+show_column_numbers = true
+pretty = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = [
+    "moviepy.*",
+    "pydub.*",
+    "gtts.*",
+    "apscheduler.*",
+    "selenium.*",
+    "webdriver_manager.*",
+    "googleapiclient.*",
+    "google_auth_oauthlib.*",
+    "google.auth.*",
+    "diffusers.*",
+    "transformers.*",
+    "torch.*",
+]
+ignore_missing_imports = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+warn_untyped_fields = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--strict-config",
+    "-ra",
+    "--tb=short",
+    "--cov=src",
+    "--cov-report=term-missing",
+    "--cov-report=html:reports/coverage",
+    "--cov-fail-under=80",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "e2e: marks tests as end-to-end tests",
+    "unit: marks tests as unit tests",
+]
+asyncio_mode = "auto"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+omit = [
+    "*/tests/*",
+    "*/__init__.py",
+    "*/migrations/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "if typing.TYPE_CHECKING:",
+    "@abstractmethod",
+    "@abc.abstractmethod",
+]
+show_missing = true
+precision = 2
+
+[tool.coverage.html]
+directory = "reports/coverage"
+
+[tool.isort]
+profile = "black"
+line_length = 88
+known_first_party = ["src"]
+skip_gitignore = true
+extend_skip = [".git", ".venv", "venv", "__pycache__"]
