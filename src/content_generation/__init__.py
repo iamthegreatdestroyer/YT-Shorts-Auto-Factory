@@ -8,4 +8,39 @@ This module handles:
 - Multi-format output generation
 """
 
-__all__: list[str] = []
+from src.content_generation.models import (
+    Hook,
+    Script,
+    SceneTransition,
+    SceneType,
+    ScriptGenerationRequest,
+    ScriptGenerationResult,
+    VideoScene,
+)
+from src.content_generation.niche_selector import (
+    HISTORICAL_MYSTERY,
+    OBSCURE_FACT,
+    PRODUCTIVITY_HACK,
+    NicheDefinition,
+    NicheSelector,
+)
+from src.content_generation.script_generator import ScriptGenerator
+
+__all__ = [
+    # Models
+    "Hook",
+    "Script",
+    "VideoScene",
+    "SceneTransition",
+    "SceneType",
+    "ScriptGenerationRequest",
+    "ScriptGenerationResult",
+    # Niches
+    "NicheDefinition",
+    "NicheSelector",
+    "HISTORICAL_MYSTERY",
+    "PRODUCTIVITY_HACK",
+    "OBSCURE_FACT",
+    # Generator
+    "ScriptGenerator",
+]

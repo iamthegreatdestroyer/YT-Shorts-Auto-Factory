@@ -1,0 +1,28 @@
+{# Historical Mystery template #}
+{# Generates scripts for mysterious historical events #}
+
+{% if hook_pattern %}
+{{ hook_pattern | replace('{keyword}', keyword) }}
+{% else %}
+This {{ keyword }} mystery has baffled historians for centuries.
+{% endif %}
+
+{% for detail in details %}
+{{ detail }}
+{% endfor %}
+
+Let me break down the mystery of {{ keyword }}.
+
+First, we know {{ fact1 }}.
+
+But here's where it gets interesting - {{ fact2 }}.
+
+Scientists have proposed several theories about {{ keyword }}.
+
+However, {{ theory }} remains the most compelling explanation.
+
+To this day, {{ keyword }} continues to fascinate archaeologists and historians.
+
+The truth might be hiding in undiscovered locations or lost documents.
+
+What do you think really happened? {{ cta }}

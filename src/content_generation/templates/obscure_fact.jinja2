@@ -1,0 +1,36 @@
+{# Obscure Fact template #}
+{# Generates scripts for amazing and surprising facts #}
+
+{% if hook_pattern %}
+{{ hook_pattern | replace('{keyword}', keyword) }}
+{% else %}
+Did you know this about {{ keyword }}?
+{% endif %}
+
+Most people have no idea about this.
+
+Here's the mind-blowing truth about {{ keyword }}:
+
+{{ fact1 }}
+
+Yes, you read that right.
+
+This discovery was made when {{ context1 }}.
+
+Scientists were shocked to find that {{ fact2 }}.
+
+The implications are huge.
+
+This means {{ implication1 }}.
+
+And even more surprisingly, {{ fact3 }}.
+
+Researchers are still studying why this happens.
+
+The leading theory is {{ theory }}.
+
+This changes everything we thought we knew about {{ keyword }}.
+
+Share this if you're amazed.
+
+{{ cta }}

@@ -1,0 +1,36 @@
+{# Productivity Hack template #}
+{# Generates scripts for productivity tips and life hacks #}
+
+{% if hook_pattern %}
+{{ hook_pattern | replace('{keyword}', keyword) }}
+{% else %}
+This {{ keyword }} trick changed my life.
+{% endif %}
+
+Most people waste time on {{ keyword }}.
+
+But there's a better way.
+
+Here's the ultimate {{ keyword }} hack:
+
+{{ tip1 }}
+
+This simple change can save you hours every single day.
+
+Here's why this works:
+
+{{ reason1 }}
+
+{{ reason2 }}
+
+You can start implementing this today.
+
+It takes less than {{ time_required }} to set up.
+
+The results speak for themselves.
+
+People who use this {{ keyword }} method report {{ benefit }}.
+
+Try it for one week and see the difference.
+
+{{ cta }}
