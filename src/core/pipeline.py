@@ -182,6 +182,9 @@ class Pipeline:
         settings: Settings,
         test_mode: bool = False,
         no_upload: bool = False,
+        topic: Optional[str] = None,
+        output_dir: Optional[Path] = None,
+        dry_run_upload: bool = False,
     ) -> None:
         """
         Initialize the pipeline.
@@ -190,12 +193,19 @@ class Pipeline:
             settings: Application settings.
             test_mode: If True, use mock services.
             no_upload: If True, skip YouTube upload.
+            topic: Override content topic for this run.
+            output_dir: Override output directory.
+            dry_run_upload: Authenticate but print upload plan instead of uploading.
         """
         self.settings = settings
         self.test_mode = test_mode
         self.no_upload = no_upload
+        self.topic = topic
+        self.dry_run_upload = dry_run_upload
 
-        # Initialize components (will be implemented in later phases)
+        if output_dir is not None:
+            self.settings.storage.output_path = output_dir
+
         self._init_components()
 
         logger.info(
@@ -380,35 +390,20 @@ class Pipeline:
     # =========================================================================
 
     async def _analyze_trends(self, context: PipelineContext) -> None:
-        """
-        Analyze trends to find content topics.
-
-        TODO: Implement actual trend analysis in Phase 2.
-        """
+        """Identify trending topic — uses explicit topic override if provided."""
         logger.debug("Analyzing trends...")
 
-        if self.test_mode:
-            # Return mock trend data
-            context.trend_data = {
-                "topic": "Amazing Technology Facts",
-                "keywords": ["technology", "innovation", "future", "amazing"],
-                "score": 0.85,
-                "source": "mock",
-            }
-            logger.info(f"Mock trend selected: {context.trend_data['topic']}")
-            return
+        topic = self.topic or (
+            "Amazing Technology Facts" if self.test_mode
+            else "5 Mind-Blowing Tech Facts You Didn't Know"
+        )
+        keywords = [w.lower() for w in topic.split() if len(w) > 3][:6] or ["tech", "facts"]
 
-        # TODO: Implement actual trend analysis
-        # trend = await self.trend_analyzer.get_top_trend()
-        # context.trend_data = trend.to_dict()
-
-        # Placeholder
-        await asyncio.sleep(0.1)  # Simulate work
         context.trend_data = {
-            "topic": "5 Mind-Blowing Tech Facts You Didn't Know",
-            "keywords": ["tech", "facts", "amazing", "innovation"],
+            "topic": topic,
+            "keywords": keywords,
             "score": 0.9,
-            "source": "youtube_trending",
+            "source": "user_override" if self.topic else ("mock" if self.test_mode else "default"),
         }
         logger.info(f"Trend selected: {context.trend_data['topic']}")
 
@@ -466,123 +461,99 @@ class Pipeline:
         }
 
     async def _generate_audio(self, context: PipelineContext) -> None:
-        """
-        Generate TTS audio from script.
-
-        TODO: Implement actual TTS in Phase 3.
-        """
+        """Generate TTS audio from script using edge-tts (free) with gTTS fallback."""
         logger.debug("Generating audio...")
 
         if context.script_data is None:
             raise StageError("No script data available", stage_name="tts_generation")
 
+        audio_path = self.settings.storage.temp_path / f"audio_{context.run_id}.mp3"
+        context.add_temp_file(audio_path)
+
         if self.test_mode:
-            # Create mock audio file path
-            context.audio_path = self.settings.storage.temp_path / f"audio_{context.run_id}.mp3"
-            context.add_temp_file(context.audio_path)
-            # Don't actually create the file in test mode
+            context.audio_path = audio_path
             return
 
-        # TODO: Implement actual TTS
-        # audio_path = await self.tts_engine.generate(context.script_data)
-        # context.audio_path = audio_path
-        # context.add_temp_file(audio_path)
+        # Build full voiceover text from script
+        parts = []
+        hook = context.script_data.get("hook", "")
+        if hook:
+            parts.append(hook)
+        for seg in context.script_data.get("segments", []):
+            txt = seg.get("text", "")
+            if txt:
+                parts.append(txt)
+        outro = context.script_data.get("outro", "")
+        if outro:
+            parts.append(outro)
+        full_text = " ".join(parts) if parts else context.script_data.get("title", "Hello")
 
-        await asyncio.sleep(0.1)
-        context.audio_path = self.settings.storage.temp_path / f"audio_{context.run_id}.mp3"
-        context.add_temp_file(context.audio_path)
+        from src.media_creation.tts.engine import synthesize
+        await synthesize(full_text, audio_path)
+        context.audio_path = audio_path
         logger.info(f"Audio generated: {context.audio_path}")
 
     async def _generate_images(self, context: PipelineContext) -> None:
-        """
-        Generate visual assets for video.
-
-        TODO: Implement actual image generation in Phase 3.
-        """
-        logger.debug("Generating images...")
-
-        if context.script_data is None:
-            raise StageError("No script data available", stage_name="image_generation")
-
-        segments = context.script_data.get("segments", [])
-        image_paths = []
-
-        for i, segment in enumerate(segments):
-            if self.test_mode:
-                path = self.settings.storage.temp_path / f"image_{context.run_id}_{i}.png"
-            else:
-                # TODO: Implement actual image generation
-                # path = await self.image_generator.generate(segment['text'])
-                await asyncio.sleep(0.05)
-                path = self.settings.storage.temp_path / f"image_{context.run_id}_{i}.png"
-
-            image_paths.append(path)
-            context.add_temp_file(path)
-
-        context.image_paths = image_paths
-        logger.info(f"Generated {len(image_paths)} images")
+        """Skipped — video compiler uses text-card frames instead of image assets."""
+        logger.debug("Image generation skipped (text-card mode)")
+        context.image_paths = []
 
     async def _compile_video(self, context: PipelineContext) -> None:
-        """
-        Compile final video from assets.
-
-        TODO: Implement actual video compilation in Phase 4.
-        """
+        """Compile final 1080x1920 MP4 with burnt-in subtitles."""
         logger.debug("Compiling video...")
 
-        if not context.audio_path or not context.image_paths:
-            raise StageError(
-                "Missing audio or images for compilation",
-                stage_name="video_compilation",
-            )
+        if context.script_data is None:
+            raise StageError("No script data available", stage_name="video_compilation")
 
-        output_path = (
-            self.settings.storage.output_path
-            / f"video_{context.run_id}.mp4"
-        )
+        output_path = self.settings.storage.output_path / f"video_{context.run_id}.mp4"
 
         if self.test_mode:
             context.video_path = output_path
             return
 
-        # TODO: Implement actual video compilation
-        # video_path = await self.video_compiler.compile(
-        #     audio_path=context.audio_path,
-        #     image_paths=context.image_paths,
-        #     script=context.script_data,
-        #     output_path=output_path,
-        # )
-        # context.video_path = video_path
+        if context.audio_path is None:
+            raise StageError("No audio path available", stage_name="video_compilation")
 
-        await asyncio.sleep(0.1)
+        from src.video_compilation.compiler import compile_video
+        await compile_video(
+            script_data=context.script_data,
+            audio_path=context.audio_path,
+            output_path=output_path,
+        )
         context.video_path = output_path
         logger.info(f"Video compiled: {context.video_path}")
 
     async def _generate_thumbnail(self, context: PipelineContext) -> None:
-        """
-        Generate video thumbnail.
-
-        TODO: Implement actual thumbnail generation in Phase 4.
-        """
+        """Generate a simple text thumbnail using Pillow."""
         logger.debug("Generating thumbnail...")
 
-        output_path = (
-            self.settings.storage.output_path
-            / f"thumbnail_{context.run_id}.jpg"
-        )
+        output_path = self.settings.storage.output_path / f"thumbnail_{context.run_id}.jpg"
 
         if self.test_mode:
             context.thumbnail_path = output_path
             return
 
-        # TODO: Implement actual thumbnail generation
-        # thumbnail_path = await self.thumbnail_generator.generate(
-        #     title=context.script_data.get('title'),
-        #     image=context.image_paths[0] if context.image_paths else None,
-        # )
-        # context.thumbnail_path = thumbnail_path
+        try:
+            import textwrap
+            from PIL import Image, ImageDraw, ImageFont  # type: ignore[import]
 
-        await asyncio.sleep(0.05)
+            title = ""
+            if context.script_data:
+                title = str(context.script_data.get("title", ""))
+
+            img = Image.new("RGB", (1280, 720), (15, 15, 30))
+            draw = ImageDraw.Draw(img)
+            wrapped = "\n".join(textwrap.wrap(title, width=30))
+            try:
+                font = ImageFont.truetype("arial.ttf", 72)
+            except Exception:
+                font = ImageFont.load_default()
+            draw.multiline_text((40, 240), wrapped, font=font, fill=(255, 255, 255), spacing=10)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            img.save(str(output_path), "JPEG", quality=90)
+        except Exception as e:
+            logger.warning(f"Thumbnail generation failed: {e} — skipping")
+
         context.thumbnail_path = output_path
         logger.info(f"Thumbnail generated: {context.thumbnail_path}")
 
@@ -629,11 +600,7 @@ class Pipeline:
         logger.info(f"Metadata optimized: {context.metadata['title']}")
 
     async def _upload_video(self, context: PipelineContext) -> None:
-        """
-        Upload video to YouTube.
-
-        TODO: Implement actual upload in Phase 6.
-        """
+        """Upload video to YouTube (or print plan in dry-run mode)."""
         logger.debug("Uploading video...")
 
         if context.video_path is None or context.metadata is None:
@@ -651,19 +618,25 @@ class Pipeline:
             logger.info("Upload skipped (no_upload=True)")
             return
 
-        # TODO: Implement actual YouTube upload
-        # video_id = await self.youtube_uploader.upload(
-        #     video_path=context.video_path,
-        #     title=context.metadata['title'],
-        #     description=context.metadata['description'],
-        #     tags=context.metadata['tags'],
-        #     thumbnail_path=context.thumbnail_path,
-        # )
-        # context.video_id = video_id
+        from src.upload.youtube_uploader import upload_video
 
-        await asyncio.sleep(0.1)
-        context.video_id = f"yt_{context.run_id}"
-        logger.info(f"Video uploaded: https://youtube.com/shorts/{context.video_id}")
+        dry_run = getattr(self, "dry_run_upload", False)
+        loop = asyncio.get_event_loop()
+        video_id = await loop.run_in_executor(
+            None,
+            lambda: upload_video(
+                video_path=context.video_path,  # type: ignore[arg-type]
+                title=str(context.metadata.get("title", "My Short")),  # type: ignore[union-attr]
+                description=str(context.metadata.get("description", "")),  # type: ignore[union-attr]
+                tags=list(context.metadata.get("tags", [])),  # type: ignore[union-attr]
+                category_id="22",
+                privacy_status="private",
+                dry_run=dry_run,
+            ),
+        )
+        if video_id:
+            context.video_id = video_id
+            logger.info(f"Video uploaded: https://youtube.com/shorts/{video_id}")
 
     async def _cleanup(self, context: PipelineContext) -> None:
         """Clean up temporary files."""

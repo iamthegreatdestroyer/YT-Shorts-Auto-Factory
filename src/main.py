@@ -24,12 +24,11 @@ import argparse
 import asyncio
 import signal
 import sys
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
 from src import __version__
-from src.core.config import Settings, get_settings, reload_settings
+from src.core.config import Settings, reload_settings
 from src.core.exceptions import (
     ConfigurationError,
     PipelineError,
@@ -64,18 +63,20 @@ class Application:
         config_path: Optional[Path] = None,
         test_mode: bool = False,
         no_upload: bool = False,
+        topic: Optional[str] = None,
+        output_dir: Optional[Path] = None,
+        upload: bool = False,
+        dry_run_upload: bool = False,
+        publish_date: Optional[str] = None,
     ) -> None:
-        """
-        Initialize the application.
-
-        Args:
-            config_path: Optional path to configuration file.
-            test_mode: If True, run in test mode with mock services.
-            no_upload: If True, generate video but skip upload.
-        """
         self.config_path = config_path
         self.test_mode = test_mode
         self.no_upload = no_upload
+        self.topic = topic
+        self.output_dir = output_dir
+        self.upload = upload
+        self.dry_run_upload = dry_run_upload
+        self.publish_date = publish_date
         self.settings: Optional[Settings] = None
         self._shutdown_event = asyncio.Event()
         self._scheduler: Optional[Any] = None
@@ -168,6 +169,9 @@ class Application:
                     settings=self.settings,
                     test_mode=self.test_mode,
                     no_upload=self.no_upload,
+                    topic=self.topic,
+                    output_dir=self.output_dir,
+                    dry_run_upload=self.dry_run_upload,
                 )
 
                 # Execute pipeline
@@ -355,8 +359,8 @@ For more information, visit: https://github.com/YTShortsFactory
         version=f"%(prog)s {__version__}",
     )
 
-    # Execution modes (mutually exclusive)
-    mode_group = parser.add_mutually_exclusive_group(required=True)
+    # Execution modes
+    mode_group = parser.add_mutually_exclusive_group(required=False)
 
     mode_group.add_argument(
         "--once",
@@ -370,10 +374,11 @@ For more information, visit: https://github.com/YTShortsFactory
         help="Run as daemon with scheduled execution",
     )
 
-    mode_group.add_argument(
+    # --dry-run is standalone; combined with --upload it runs the pipeline in dry-run mode
+    parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Validate configuration and exit",
+        help="Validate config only (or, with --upload, run pipeline without real upload)",
     )
 
     # Optional arguments
@@ -394,6 +399,33 @@ For more information, visit: https://github.com/YTShortsFactory
         "--no-upload",
         action="store_true",
         help="Generate video but skip YouTube upload",
+    )
+
+    parser.add_argument(
+        "--upload",
+        action="store_true",
+        help="Upload generated video to YouTube (requires OAuth credentials)",
+    )
+
+    parser.add_argument(
+        "--topic",
+        type=str,
+        metavar="TOPIC",
+        help="Override content topic for this run",
+    )
+
+    parser.add_argument(
+        "--output",
+        type=Path,
+        metavar="DIR",
+        help="Output directory for generated video (default: output/)",
+    )
+
+    parser.add_argument(
+        "--publish-date",
+        type=str,
+        metavar="DATE",
+        help="Schedule publish date (e.g. 'tomorrow', '2026-06-01') — informational only",
     )
 
     parser.add_argument(
@@ -443,11 +475,22 @@ async def async_main(args: argparse.Namespace) -> int:
     Returns:
         Exit code (0 for success, non-zero for failure).
     """
-    # Create application
+    upload = getattr(args, "upload", False)
+    dry_run_upload = args.dry_run and upload
+
+    if not args.once and not args.daemon and not args.dry_run:
+        print("Error: one of --once, --daemon, or --dry-run is required")
+        return 2
+
     app = Application(
         config_path=args.config,
         test_mode=args.test,
-        no_upload=args.no_upload,
+        no_upload=(not upload) and (not dry_run_upload),
+        topic=getattr(args, "topic", None),
+        output_dir=getattr(args, "output", None),
+        upload=upload,
+        dry_run_upload=dry_run_upload,
+        publish_date=getattr(args, "publish_date", None),
     )
 
     try:
@@ -461,32 +504,36 @@ async def async_main(args: argparse.Namespace) -> int:
             setup_logging(log_level="INFO")
 
         # Execute based on mode
-        if args.dry_run:
+        if args.dry_run and not upload:
             logger.info("Dry run - configuration is valid")
-            print("\n✅ Configuration validated successfully!")
-            print(f"\nSettings summary:")
-            print(f"  Environment: {app.settings.app.environment.value}")
-            print(f"  Niche: {app.settings.content.niche}")
-            print(f"  Target Duration: {app.settings.content.target_duration}s")
-            print(f"  TTS Provider: {app.settings.tts.provider.value}")
-            print(f"  Image Provider: {app.settings.image.provider.value}")
+            s = app.settings
+            assert s is not None
+            print("\n[OK] Configuration validated successfully!")
+            print("\nSettings summary:")
+            print(f"  Environment: {s.app.environment.value}")
+            print(f"  Niche: {s.content.niche}")
+            print(f"  Target Duration: {s.content.target_duration}s")
+            print(f"  TTS Provider: {s.tts.provider.value}")
+            print(f"  Image Provider: {s.image.provider.value}")
             return 0
 
         # Set up signal handlers
         setup_signal_handlers(app)
 
-        if args.once:
-            # Run once
+        if args.once or (args.dry_run and upload):
+            if app.publish_date:
+                print(f"  Publish date: {app.publish_date} (informational — not yet scheduled)")
             result = await app.run_once()
             if result.get("success", False):
-                print(f"\n✅ Video generated successfully!")
+                print("\n[OK] Video generated successfully!")
                 if result.get("video_path"):
                     print(f"   Video: {result['video_path']}")
                 if result.get("video_id"):
                     print(f"   YouTube ID: {result['video_id']}")
                 return 0
             else:
-                print(f"\n❌ Video generation failed: {result.get('error', 'Unknown error')}")
+                err = result.get("error", "Unknown error")
+                print(f"\n[FAIL] Video generation failed: {err}")
                 return 1
 
         elif args.daemon:
@@ -496,22 +543,22 @@ async def async_main(args: argparse.Namespace) -> int:
 
     except ConfigurationError as e:
         logger.error(f"Configuration error: {e}")
-        print(f"\n❌ Configuration error: {e}")
+        print(f"\n[FAIL] Configuration error: {e}")
         return 2
 
     except YTShortsError as e:
         logger.error(f"Application error: {e}")
-        print(f"\n❌ Error: {e}")
+        print(f"\n[FAIL] Error: {e}")
         return 1
 
     except KeyboardInterrupt:
         logger.info("Interrupted by user")
-        print("\n⚠️  Interrupted by user")
+        print("\n[WARN]  Interrupted by user")
         return 130
 
     except Exception as e:
         logger.exception("Unexpected error")
-        print(f"\n❌ Unexpected error: {e}")
+        print(f"\n[FAIL] Unexpected error: {e}")
         return 1
 
     finally:
@@ -535,7 +582,7 @@ def main() -> int:
     try:
         return asyncio.run(async_main(args))
     except KeyboardInterrupt:
-        print("\n⚠️  Interrupted")
+        print("\n[WARN]  Interrupted")
         return 130
 
 
