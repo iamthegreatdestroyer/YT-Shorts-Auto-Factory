@@ -11,8 +11,6 @@ OAuth flow:
 from __future__ import annotations
 
 import json
-import os
-import pickle
 from pathlib import Path
 from typing import Optional
 
@@ -57,7 +55,7 @@ def _load_credentials():
                 "credentials/client_secrets.json"
             )
         flow = InstalledAppFlow.from_client_secrets_file(str(CLIENT_SECRETS_PATH), SCOPES)
-        creds = flow.run_local_server(port=8080)
+        creds = flow.run_local_server(port=0)  # port=0 → OS picks a free port
         _save_token(creds)
 
     return creds
@@ -95,13 +93,14 @@ def upload_video(
     Returns:
         YouTube video ID, or None on dry_run.
     """
-    from googleapiclient.discovery import build  # type: ignore[import]
-    from googleapiclient.http import MediaFileUpload  # type: ignore[import]
-
-    creds = _load_credentials()
-    youtube = build("youtube", "v3", credentials=creds)
-
     if dry_run:
+        # In dry-run mode: attempt to load cached token (non-blocking).
+        # If no valid token exists, skip OAuth and just print the plan.
+        try:
+            creds = _load_credentials()
+            logger.info("Dry-run: credentials loaded OK")
+        except Exception as e:
+            logger.warning(f"Dry-run: credential load skipped ({e})")
         logger.info("Dry-run mode — skipping actual upload")
         print(f"\nWould upload: {title}")
         print(f"  File:        {video_path}")
@@ -109,6 +108,12 @@ def upload_video(
         print(f"  Privacy:     {privacy_status}")
         print(f"  Category ID: {category_id}")
         return None
+
+    from googleapiclient.discovery import build  # type: ignore[import]
+    from googleapiclient.http import MediaFileUpload  # type: ignore[import]
+
+    creds = _load_credentials()
+    youtube = build("youtube", "v3", credentials=creds)
 
     body = {
         "snippet": {
